@@ -6,3 +6,6 @@ dataset/*
 
 # Don't ignore any .gitkeep files (they help git recognize otherwise empty placeholder folders)
 !.gitkeep
+
+# Ignore coding agent instructions
+AGENTS.md
