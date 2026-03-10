@@ -1,5 +1,6 @@
 
 
+
 # DVS Final Project
 Design of Visual Systems – Spring Term 2026 – Imperial College London
 
@@ -28,6 +29,9 @@ WIP - Describe what this program does in moderate detail.
 4. Select an image to process from the dialog that opens. You may have to navigate inside subfolders to find the images.
 
 ### For Contributors
+All code and scripts go in the `matlab/` folder.
+Non-dataset images and other resources go in the `assets/` folder.
+All dataset images go in the `dataset/` folder, which will be **automatically generated** the first time you run the program. This folder is intentionally not saved to Github.
 
 | file | instructions |
 |--|--|
