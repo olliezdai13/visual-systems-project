@@ -7,11 +7,13 @@ Design of Visual Systems – Spring Term 2026 – Imperial College London
  - Lynton Sutton
  - India Lloyd-Evans
 
-## Summary
+## Project Summary
 WIP - Describe what this program does in moderate detail.
 
 ## Running the Code
-WIP - Describe how to open the project in Matlab, how to load a dataset, and how to run the code and view the results.
+1. Open the `matlab/` folder in Matlab
+2. Run `main.m`. Be patient as it downloads the dataset on your first run.
+3. Select an image to process from the dialog that opens. You may have to navigate inside subfolders to find the images.
 
 ## Demo
 WIP - Demonstrate our code working with screenshots and descriptions.
