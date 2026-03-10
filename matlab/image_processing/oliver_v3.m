@@ -2,7 +2,8 @@ function result = oliver_v3(img)
 % HSV-based plate isolation followed by aggressive erosion + reconstruction to keep only large regions.
     plateMask = plate_masking_block(img);
     largeComponents = recover_large_components_block(plateMask);
-    filteredMask = hough_filter_rectangle(largeComponents);
+    best_geometry_mask = plate_geometry_filter_block(largeComponents);
+    filteredMask = hough_filter_rectangle(best_geometry_mask);
     [rectMask, rectBBox, lineSet, corners] = hough_find_corners(filteredMask);
 
     [croppedPlate, cropOffset] = crop_plate_block(img, rectBBox, rectMask);
@@ -26,17 +27,20 @@ function plateMask = plate_masking_block(img)
     % whiteMask = (sat <= 0.18) & (val >= 0.80);
 
     % Relaxed white threshold
-    whiteMask = (sat <= 0.25) & (val >= 0.65);
+    whiteMask = (sat <= 0.20) & (val >= 0.75);
 
     combinedMask = yellowMask | whiteMask;
 
+    % Modest dilation to grow thin strokes before the closing stage.
+    precloseDilate = imdilate(combinedMask, strel('disk', 3));
+
     se = strel('rectangle', [7, 9]);
-    closedMask = imclose(combinedMask, se);
+    closedMask = imclose(precloseDilate, se);
 
     plateMask = imfill(closedMask, 'holes');
 
-    steps = {img, hue, sat, val, yellowMask, whiteMask, combinedMask, closedMask, plateMask};
-    titles = {'Original','Hue','Saturation','Value','Yellow Gate','White Gate','Combined','Closing','Filled'};
+    steps = {img, hue, sat, val, yellowMask, whiteMask, combinedMask, precloseDilate, closedMask, plateMask};
+    titles = {'Original','Hue','Saturation','Value','Yellow Gate','White Gate','Combined','Dilated (r=3)','Closing','Filled'};
     figure('Name','oliver_v2 - Pipeline','NumberTitle','off');
     t = tiledlayout(1, numel(steps), 'TileSpacing', 'compact', 'Padding', 'compact');
     for i = 1:numel(steps)
@@ -65,6 +69,72 @@ function refinedMask = recover_large_components_block(mask)
         title(titles{i});
     end
     title(t, 'Aggressive erosion + reconstruction to keep large components');
+end
+
+function plateMask = plate_geometry_filter_block(mask)
+% Keep only connected components that match license plate geometry (aspect, area).
+    % Close thin horizontal gaps so fractured plates are merged before geometry checks.
+    closeSe = strel('line', 15, 0);
+    closedMask = imclose(mask, closeSe);
+
+    conn = bwconncomp(closedMask);
+    props = regionprops(conn, 'BoundingBox', 'Area');
+
+    totalPixels = numel(closedMask);
+    minArea = 0.001 * totalPixels; % small noise rejection
+    maxArea = 0.10  * totalPixels; % avoid swallowing the whole car
+
+    keepIdx = false(conn.NumObjects, 1);
+    for i = 1:conn.NumObjects
+        bb = props(i).BoundingBox;
+        width = bb(3);
+        height = bb(4);
+        aspect = width / max(height, eps);
+
+        area = props(i).Area;
+
+        if aspect >= 3 && aspect <= 6.0 && ...
+           area >= minArea && area <= maxArea
+            keepIdx(i) = true;
+        end
+    end
+
+    % Build an overlay showing all component bounding boxes before filtering.
+    bboxOverlay = repmat(closedMask, [1 1 3]); % start from binary mask as RGB
+    for i = 1:conn.NumObjects
+        bb = props(i).BoundingBox;
+        r0 = max(1, floor(bb(2)));
+        c0 = max(1, floor(bb(1)));
+        r1 = min(size(mask, 1), ceil(bb(2) + bb(4) - 1));
+        c1 = min(size(mask, 2), ceil(bb(1) + bb(3) - 1));
+        bboxOverlay([r0 r1], c0:c1, 1) = 1; % top/bottom red
+        bboxOverlay(r0:r1, [c0 c1], 1) = 1; % left/right red
+    end
+    bboxOverlay = im2double(bboxOverlay); % imshow expects numeric for 3-channel
+
+    plateMask = false(size(closedMask));
+    if any(keepIdx)
+        keptPixels = vertcat(conn.PixelIdxList{keepIdx});
+        plateMask(keptPixels) = true;
+    end
+
+    % Visualize raw mask, filtered mask, and labeled kept blobs.
+    keptLabels = labelmatrix(conn);
+    if conn.NumObjects > 0
+        keptLabels(~ismember(keptLabels, find(keepIdx))) = 0;
+    end
+    labelOverlay = label2rgb(keptLabels, 'spring', 'k', 'shuffle');
+
+    steps = {mask, closedMask, bboxOverlay, plateMask, labelOverlay};
+    titles = {'Input Mask','Closed (Horizontal Line)','Bounding Boxes','Geometry Filtered','Kept Components'};
+    figure('Name','oliver_v3 - Plate Geometry Filter','NumberTitle','off');
+    t = tiledlayout(1, numel(steps), 'TileSpacing', 'compact', 'Padding', 'compact');
+    for i = 1:numel(steps)
+        nexttile;
+        imshow(steps{i}, []);
+        title(titles{i});
+    end
+    title(t, 'Aspect/area filter for plate-like blobs (no extent gate)');
 end
 
 function filteredMask = hough_filter_rectangle(mask)
@@ -136,12 +206,12 @@ function [rectMask, rectBBox, lines, corners] = hough_find_corners(mask)
     [H, theta, rho] = hough(edges);
 
     % Step 3: peak picking and line extraction
-    peakCount   = 30;
+    peakCount   = 20;
     peakThresh  = 0.30 * max(H(:));
     neighborhood = [7 7];
     peaks = houghpeaks(H, peakCount, 'Threshold', peakThresh, 'NHoodSize', neighborhood);
 
-    lines = houghlines(edges, theta, rho, peaks, 'FillGap', 30, 'MinLength', 50);
+    lines = houghlines(edges, theta, rho, peaks, 'FillGap', 50, 'MinLength', 10);
 
     rectMask = false(size(mask));
     rectBBox = struct('xLeft', [], 'xRight', [], 'yTop', [], 'yBottom', []);
