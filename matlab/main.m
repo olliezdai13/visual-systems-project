@@ -68,9 +68,20 @@ title(sprintf('Selected image: %s', filename), 'Interpreter', 'none');
 % -------------------------------------------------------------------------
 processedImg = process_image(img);
 
-% If processing changes the image, show it.
+% If processing changes the image, show a side-by-side montage (original left, processed right).
 if ~isequal(processedImg, img)
-    figure('Name', 'Processed Image', 'NumberTitle', 'off');
-    imshow(processedImg);
-    title('Processed output');
+    originalRGB  = ensureRGB(img);
+    processedRGB = ensureRGB(processedImg);
+    figure('Name', 'Original vs Processed', 'NumberTitle', 'off');
+    montage({originalRGB, processedRGB}, 'Size', [1 2]);
+    title('Original (left) and processed (right)');
+end
+
+function rgbImg = ensureRGB(inImg)
+% Convert grayscale or binary images to 3-channel RGB for consistent montage display.
+    if ndims(inImg) == 2 || size(inImg, 3) == 1
+        rgbImg = cat(3, inImg, inImg, inImg);
+    else
+        rgbImg = inImg;
+    end
 end
