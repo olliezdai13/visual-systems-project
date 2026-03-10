@@ -8,6 +8,10 @@ clear; clc; close all;
 projectRoot = fileparts(fileparts(mfilename('fullpath')));
 datasetDir  = fullfile(projectRoot, 'dataset');
 
+% Add `image_processing/` to the project path so that we can call functions inside of it.
+pipelineDir = fullfile(fileparts(mfilename('fullpath')), 'image_processing');
+addpath(pipelineDir);
+
 % -------------------------------------------------------------------------
 % 1) Ensure dataset is present (download + unzip if missing)
 % -------------------------------------------------------------------------
