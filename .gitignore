@@ -1,0 +1,8 @@
+# Ignore any dataset .zip files
+*.zip
+
+# Ignore any dataset folders
+datasets/*
+
+# Don't ignore any .gitkeep files (they help git recognize otherwise empty placeholder folders)
+!.gitkeep

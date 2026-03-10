@@ -10,7 +10,6 @@ Design of Visual Systems – Spring Term 2026 – Imperial College London
 ## Summary
 WIP - Describe what this program does in moderate detail.
 
-
 ## Running the Code
 WIP - Describe how to open the project in Matlab, how to load a dataset, and how to run the code and view the results.
 
