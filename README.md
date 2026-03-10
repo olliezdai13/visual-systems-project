@@ -1,6 +1,7 @@
 
 
 
+
 # DVS Final Project
 Design of Visual Systems – Spring Term 2026 – Imperial College London
 
@@ -35,8 +36,9 @@ All dataset images go in the `dataset/` folder, which will be **automatically ge
 
 | file | instructions |
 |--|--|
-| main.m | The entrypoint into the program. Edit this file to change the dataset, image loading behavior, etc. |
-| process_image.m | Contains our image processing logic. The `process_image()` function is the entrypoint. Use functions to split our image processing workflow into discrete, logical steps. This is a good organization practice and will help us collaborate. |
+| `main.m` | The entrypoint into the program. Edit this file to change the dataset, image loading behavior, etc. |
+| `process_image.m` | Contains our image processing logic. The `process_image()` function is the entrypoint. It is the "brains" that determines which image processing workflow to run. |
+| `image_processing/*` | Our actual image processing workflows go in here. Make major edits as new files. Try to use functions to split image processing workflows into discrete, logical steps. This is a good organization practice and will help us understand each others' code. |
 
 
 ## Demo
