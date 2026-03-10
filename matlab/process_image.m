@@ -3,5 +3,6 @@ function processedImg = process_image(img)
 
 % Please write new function versions for major iterations of our image processing pipeline
     % processedImg = lynton_v1(img);
-    processedImg = oliver_v1(img);
+    % processedImg = oliver_v2(img);
+    processedImg = oliver_v3(img);
 end

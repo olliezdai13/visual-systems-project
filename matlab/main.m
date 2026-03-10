@@ -21,6 +21,7 @@ if ~exist(datasetDir, 'dir')
     zipPath = fullfile(projectRoot, 'dataset.zip');
     
     % Download zip
+    
     fprintf('  -> Saving to %s\n', zipPath);
     websave(zipPath, url);
     
