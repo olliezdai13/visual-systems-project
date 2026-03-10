@@ -20,8 +20,8 @@ WIP - Describe what this program does in moderate detail.
   - Computer Vision Toolbox Model for Text Detection (TODO: maybe phase this one out for a better model)
 - Install via Matlab: Home → Add-Ons → Get Add-Ons → search and install the toolboxes above.
 
-### Running the code
-1. Download or clone this project onto your compputer.
+## Running the Code
+1. Download or clone this project onto your computer.
 2. Open the project's `matlab/` folder in Matlab.
 3. Open and run `main.m` in Matlab. Be patient as it downloads the dataset on your first run.
 4. Select an image to process from the dialog that opens. You may have to navigate inside subfolders to find the images.
