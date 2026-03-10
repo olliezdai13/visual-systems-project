@@ -10,7 +10,17 @@ Design of Visual Systems – Spring Term 2026 – Imperial College London
 ## Project Summary
 WIP - Describe what this program does in moderate detail.
 
-## Running the Code
+## INSTRUCTIONS
+
+### Prerequisites
+- You must have Matlab installed
+- Required add-ons:
+  - Image Processing Toolbox
+  - Computer Vision Toolbox
+  - Computer Vision Toolbox Model for Text Detection (TODO: maybe phase this one out for a better model)
+- Install via Matlab: Home → Add-Ons → Get Add-Ons → search and install the toolboxes above.
+
+### Running the code
 1. Download or clone this project onto your compputer.
 2. Open the project's `matlab/` folder in Matlab.
 3. Open and run `main.m` in Matlab. Be patient as it downloads the dataset on your first run.
