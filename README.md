@@ -1,4 +1,5 @@
 
+
 # DVS Final Project
 Design of Visual Systems – Spring Term 2026 – Imperial College London
 
@@ -20,11 +21,19 @@ WIP - Describe what this program does in moderate detail.
   - Computer Vision Toolbox Model for Text Detection (TODO: maybe phase this one out for a better model)
 - Install via Matlab: Home → Add-Ons → Get Add-Ons → search and install the toolboxes above.
 
-## Running the Code
+### Running the Code
 1. Download or clone this project onto your computer.
 2. Open the project's `matlab/` folder in Matlab.
 3. Open and run `main.m` in Matlab. Be patient as it downloads the dataset on your first run.
 4. Select an image to process from the dialog that opens. You may have to navigate inside subfolders to find the images.
+
+### For Contributors
+
+| file | instructions |
+|--|--|
+| main.m | The entrypoint into the program. Edit this file to change the dataset, image loading behavior, etc. |
+| process_image.m | Contains our image processing logic. The `process_image()` function is the entrypoint. Use functions to split our image processing workflow into discrete, logical steps. This is a good organization practice and will help us collaborate. |
+
 
 ## Demo
 WIP - Demonstrate our code working with screenshots and descriptions.
