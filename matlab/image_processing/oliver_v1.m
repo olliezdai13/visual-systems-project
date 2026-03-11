@@ -1,3 +1,5 @@
+% OLIVER WAS HERE
+
 % I'm not happy with this overall approach. Scrapping this.
 
 function processedImg = oliver_v1(img)
