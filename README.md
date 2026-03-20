@@ -2,6 +2,7 @@
 
 
 
+
 # DVS Final Project
 Design of Visual Systems – Spring Term 2026 – Imperial College London
 
@@ -11,8 +12,9 @@ Design of Visual Systems – Spring Term 2026 – Imperial College London
  - India Lloyd-Evans
 
 ## Project Summary
-We chose the task of number plate reading. We picked this because there was opportunity to apply our learning of multiple detection methods and colour processing. Challenges we faced in our attempts were largely to do with the different colour contrasts and angular positioning of the number plates in different test images from the dataset – isolating the number plate as a rectangular box amidst shadowing also meant crops became too tight. We employed OCR as the ‘reading’ program, which was somewhat accurate, with slight error in recognising similar characters such as ‘7’ and ‘T’, as well as ‘U’ and ‘V’, but this was not something we could solve further. 
-Overall, we made many attempts with roughly 17 different methods, of which we have documented 10. Our recommendations are that ‘oliver_v4’, ‘lynton_v1’ and ‘india_v9’ demonstrate the best segmentations of the image processing (the former two), with the latter showing an output for number plate reading. 
+We chose the task of vehicle number plate recognition. We picked this because there was opportunity to apply our learning of multiple detection methods and colour processing. Challenges we faced in our attempts were largely to do with the different colour contrasts and angular positioning of the number plates in different test images from the dataset – isolating the number plate as a rectangular box amidst shadowing also meant crops became too tight. We employed OCR as the ‘reading’ program, which was somewhat accurate, with slight error in recognising similar characters such as ‘7’ and ‘T’, as well as ‘U’ and ‘V’, but this was not something we focused on solving. 
+
+Overall, we made many attempts with roughly 17 different methods, of which we have documented 10. To see the results for yourself, we recommend trying versions ‘oliver_v4’, ‘lynton_v3’ and ‘india_v9’, which are the best versions developed by each team member. 'oliver_v4' and 'lynton_v3' demonstrate the best segmentation-based image processing pipelines. 'india_v9' achieved the best plate-reading OCR accuracy across multiple attempts. 
 
 
 ## INSTRUCTIONS
@@ -143,6 +145,7 @@ lynton's description here TODO...
 ## Analysis
 What Worked Well:
 
+ - 'k-means' segmentation was superb at isolating the license plate "rectangle". This allowed us to use simple techniques to isolate the most promising connected components, like connected component weighted scoring (aspect ratio, fill, and size weighted scoring) and morphological operations like erosion, dilation, and geodesic dilation for reconstruction. 
  - Yellow-plate detection using HSV colour masking worked quite well after parameter tuning. Once the correct Hue/Saturation/Value ranges were found, it isolated the plate with minimal noise. 
  - High-sensitivity adaptive binarization (Sensitivity 0.99) combined with morphological operations effectively removed background noise while preserving characters.
  - When experimenting with CRAFT, it reliably located the plate region even under moderate angles and varying lighting.
@@ -151,18 +154,19 @@ What Didn't Work:
 
  - Whilst Yellow-plate detection using HSV colour masking worked well, it was not robust and only worked for 1 test image. When using different data sets the HSV ranges would need to be tuned. An adaptive version would be necessary.
  - For OCR to correctly read the number plate, the characters of the plate would need to be perfectly isolated, any noise or additional 'blobs' would lead to errors or partial readings.
- - Hough transform was not able to identify vertical lines
- - White front plates proved significantly harder than yellow rear plates because of similarity to car body paint and reflections
+ - Hough transform was not able to identify vertical lines. This proved quite challenging as we were unable to consistently utilize it for identifying the straight edges of the license plate. 
+ - White front plates proved significantly harder than yellow rear plates because of similarity to car body paint and reflections. Many images have overall low contrast, with lots of muted light grays and silvers.
  - Purely rule-based methods (HSV + morphology) struggled with strong parallax and diverse lighting conditions
 
 Areas for Improvement: 
 
+ - Our script pulls a limited dataset consisting mostly of car license plates from the rear. Future scripts should be tested on a more varied and robust selection of images, from wider angles and more varied distances.
+ - Overall, our OCR accuracy was poor. It may pay to utilize a better model, or one trained specifically on car number plates.
  - Full automation of region selection: develop a scoring system that combines CRAFT confidence, aspect ratio, and plate-like shape.
  - Perspective correction: Automatically detect and unwarp trapezoidal plates caused by side angles (currently only basic deskewing is used).
  - Hybrid OCR engine: Integrate EasyOCR or PaddleOCR (via Python) for higher character recognition accuracy on challenging plates.
  - Multi-plate support: Extend the system to handle images containing multiple vehicles.
  - Performance optimisation: Add GPU support for CRAFT and explore newer models such as YOLOv8 for plate detection.
-
 
 
 
