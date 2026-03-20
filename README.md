@@ -93,7 +93,7 @@ This version excels at license plate detection and cropping. It has a high succe
 
 ### Version: india_v9
 
-india's description here TODO...
+This code centralises OCR preprocessing, successfully cropping the perimeter of the number plate (although performance varies with colour contrasts), attempting to binarise the image and identify regions of interest based on identifying a sequence of black and white distribution, similar to barcode recognition. 
 
 > The original image, and the final cropped license plate region.\
 <img src="./assets/demo-indiav9-result.png">
@@ -107,7 +107,7 @@ india's description here TODO...
 > Step 3: plate candidate selection and binarization\
 <img src="./assets/demo-indiav9-4.png">
 
-> Step 4: INDIA TODO...\
+> Step 4: Top graph reads the cropped number plate image row by row to plot the white distribution. Below, the peaks and troughs represent the spacing of the characters, allowing for them to be detected for the OCR program\
 <img src="./assets/demo-indiav9-5.png">
 
 > Step 5: find individual character blobs
