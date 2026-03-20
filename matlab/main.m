@@ -13,6 +13,37 @@ pipelineDir = fullfile(fileparts(mfilename('fullpath')), 'image_processing');
 addpath(pipelineDir);
 
 % -------------------------------------------------------------------------
+% 0) Let the user choose an image processing pipeline version
+% -------------------------------------------------------------------------
+availablePipelines = discover_pipeline_versions(pipelineDir);
+
+if isempty(availablePipelines)
+    error('main:noPipelinesFound', ...
+        'No pipeline versions matching *_v*.m were found in %s', pipelineDir);
+end
+
+defaultPipelineIdx = find(strcmp(availablePipelines, 'oliver_v4'), 1);
+if isempty(defaultPipelineIdx)
+    defaultPipelineIdx = 1;
+end
+
+[selectedIdx, selectionConfirmed] = listdlg( ...
+    'PromptString', 'Select an image processing script version:', ...
+    'SelectionMode', 'single', ...
+    'ListString', availablePipelines, ...
+    'InitialValue', defaultPipelineIdx, ...
+    'ListSize', [220 160], ...
+    'Name', 'Select Processing Version');
+
+if ~selectionConfirmed
+    fprintf('No processing version selected. Exiting.\n');
+    return;
+end
+
+selectedPipeline = availablePipelines{selectedIdx};
+fprintf('Selected pipeline: %s\n', selectedPipeline);
+
+% -------------------------------------------------------------------------
 % 1) Ensure dataset is present (download + unzip if missing)
 % -------------------------------------------------------------------------
 if ~exist(datasetDir, 'dir')
@@ -66,7 +97,7 @@ title(sprintf('Selected image: %s', filename), 'Interpreter', 'none');
 % -------------------------------------------------------------------------
 % 4) Hook into processing pipeline (edit process_image.m to add steps)
 % -------------------------------------------------------------------------
-processedImg = process_image(img);
+processedImg = process_image(img, selectedPipeline);
 
 % If processing changes the image, show a side-by-side montage (original left, processed right).
 if ~isequal(processedImg, img)
@@ -84,4 +115,19 @@ function rgbImg = ensureRGB(inImg)
     else
         rgbImg = inImg;
     end
+end
+
+function pipelineNames = discover_pipeline_versions(pipelineDir)
+% Discover top-level versioned pipeline scripts, e.g. oliver_v4.m.
+    pipelineFiles = dir(fullfile(pipelineDir, '*_v*.m'));
+    pipelineNames = {};
+
+    for idx = 1:numel(pipelineFiles)
+        [~, pipelineName] = fileparts(pipelineFiles(idx).name);
+        if ~isempty(regexp(pipelineName, '^[A-Za-z]\w*_v\d+$', 'once'))
+            pipelineNames{end + 1} = pipelineName; %#ok<AGROW>
+        end
+    end
+
+    pipelineNames = sort(pipelineNames);
 end
