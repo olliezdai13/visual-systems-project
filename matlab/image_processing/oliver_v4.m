@@ -6,8 +6,15 @@ function result = oliver_v4(img)
 
     [clusterLabels, segmentedRGB] = kmeans_segmentation_block(img);
     nonRedMask = exclude_red_components_block(img);
-    [bestMask, bestClusterIdx, bestStats] = select_plate_component_block(img, clusterLabels, nonRedMask);
-    result = render_selected_component_block(img, segmentedRGB, bestMask, bestClusterIdx, bestStats);
+    [bestMask, bestClusterIdx, bestStats, bestComponentMasks] = select_plate_component_block(img, clusterLabels, nonRedMask);
+    rotatedBoxes = rotated_bbox_candidates_block(bestComponentMasks);
+
+    selectedRotatedBox = [];
+    if bestClusterIdx > 0
+        selectedRotatedBox = rotatedBoxes{bestClusterIdx};
+    end
+
+    result = render_selected_component_block(img, segmentedRGB, bestMask, bestClusterIdx, bestStats, selectedRotatedBox);
 end
 
 function [clusterLabels, segmentedRGB] = kmeans_segmentation_block(img)
@@ -56,7 +63,7 @@ function nonRedMask = exclude_red_components_block(img)
     title('Original | Hue | Saturation | Value | Explicit red mask | Red-suppressed image');
 end
 
-function [bestMask, bestClusterIdx, bestStats] = select_plate_component_block(img, clusterLabels, nonRedMask)
+function [bestMask, bestClusterIdx, bestStats, bestComponentMasks] = select_plate_component_block(img, clusterLabels, nonRedMask)
 % Score k-means cluster components by simple rectangular geometry after red suppression.
     clusterCount = max(clusterLabels(:));
     imageArea = size(img, 1) * size(img, 2);
@@ -64,6 +71,7 @@ function [bestMask, bestClusterIdx, bestStats] = select_plate_component_block(im
     bestMask = false(size(clusterLabels));
     bestClusterIdx = 0;
     bestStats = default_stats();
+    bestComponentMasks = cell(1, clusterCount);
 
     clusterPreviewTiles = cell(1, clusterCount);
     processedPreviewTiles = cell(1, clusterCount);
@@ -76,6 +84,7 @@ function [bestMask, bestClusterIdx, bestStats] = select_plate_component_block(im
         clusterPreviewTiles{clusterIdx} = mask_to_rgb(rawMask);
         processedPreviewTiles{clusterIdx} = mask_to_rgb(processedMask);
         candidatePreviewTiles{clusterIdx} = mask_to_rgb(candidateMask);
+        bestComponentMasks{clusterIdx} = candidateMask;
 
         if candidateStats.score > bestScore
             bestScore = candidateStats.score;
@@ -110,7 +119,26 @@ function [bestMask, bestClusterIdx, bestStats] = select_plate_component_block(im
 
 end
 
-function result = render_selected_component_block(img, segmentedRGB, bestMask, bestClusterIdx, bestStats)
+function rotatedBoxes = rotated_bbox_candidates_block(componentMasks)
+% Compute and display rotated bounding boxes for each selected cluster component.
+    clusterCount = numel(componentMasks);
+    rotatedBoxes = cell(1, clusterCount);
+    overlayTiles = cell(1, clusterCount);
+
+    for clusterIdx = 1:clusterCount
+        componentMask = componentMasks{clusterIdx};
+        rotatedBoxes{clusterIdx} = compute_rotated_bbox(componentMask);
+        overlayTiles{clusterIdx} = draw_polygon_overlay(mask_to_rgb(componentMask), rotatedBoxes{clusterIdx}, [0 1 0]);
+    end
+
+    figure('Name', 'oliver_v4 - Rotated Bounding Boxes', 'NumberTitle', 'off');
+    montage(overlayTiles, ...
+        'Size', [2 4], ...
+        'BackgroundColor', 'white', 'BorderSize', 8);
+    title('Best component per cluster with rotated bounding-box overlays');
+end
+
+function result = render_selected_component_block(img, segmentedRGB, bestMask, bestClusterIdx, bestStats, rotatedBox)
 % Return the selected segmented region and show the final extraction.
     result = img;
 
@@ -120,7 +148,7 @@ function result = render_selected_component_block(img, segmentedRGB, bestMask, b
         result(:, :, channelIdx) = channelPlane;
     end
 
-    bboxOverlay = draw_bbox_overlay(img, bestStats.bbox, [0 1 0]);
+    bboxOverlay = draw_polygon_overlay(img, rotatedBox, [0 1 0]);
     resultTitle = sprintf('Selected cluster %d | aspect %.2f | fill %.2f | area %.3f', ...
         bestClusterIdx, bestStats.aspectRatio, bestStats.fillRatio, bestStats.areaFraction);
 
@@ -229,6 +257,53 @@ function stats = compute_component_stats(pixelIdxList, imageSize, imageArea)
     stats.widthFraction = width / imageSize(2);
 end
 
+function rotatedBox = compute_rotated_bbox(componentMask)
+% Estimate a minimum-area rotated rectangle from the component orientation.
+    rotatedBox = [];
+
+    if ~any(componentMask(:))
+        return;
+    end
+
+    props = regionprops(componentMask, 'Orientation', 'Centroid');
+    if isempty(props)
+        return;
+    end
+
+    boundaryMask = bwmorph(componentMask, 'remove');
+    [boundaryRows, boundaryCols] = find(boundaryMask);
+    if isempty(boundaryRows)
+        [boundaryRows, boundaryCols] = find(componentMask);
+    end
+
+    centroid = props(1).Centroid;
+    theta = props(1).Orientation * pi / 180;
+
+    centeredX = boundaryCols - centroid(1);
+    centeredY = -(boundaryRows - centroid(2));
+
+    alignRotation = [cos(theta), sin(theta); -sin(theta), cos(theta)];
+    alignedPoints = alignRotation * [centeredX.'; centeredY.'];
+
+    minX = min(alignedPoints(1, :));
+    maxX = max(alignedPoints(1, :));
+    minY = min(alignedPoints(2, :));
+    maxY = max(alignedPoints(2, :));
+
+    alignedCorners = [ ...
+        minX, minY; ...
+        maxX, minY; ...
+        maxX, maxY; ...
+        minX, maxY];
+
+    inverseRotation = [cos(theta), -sin(theta); sin(theta), cos(theta)];
+    restoredCorners = inverseRotation * alignedCorners.';
+
+    rotatedX = restoredCorners(1, :).'+ centroid(1);
+    rotatedY = -restoredCorners(2, :).'+ centroid(2);
+    rotatedBox = [rotatedX, rotatedY];
+end
+
 function score = score_component(stats)
 % Prefer plate-like rectangles: wide, compact, and not too small or large.
     targetAspect = 4.0;
@@ -266,26 +341,41 @@ function score = score_component(stats)
     end
 end
 
-function overlay = draw_bbox_overlay(img, bbox, color)
-% Draw a thin rectangle directly into an RGB image.
+function overlay = draw_polygon_overlay(img, polygon, color)
+% Draw a thin quadrilateral directly into an RGB image.
     overlay = im2double(img);
 
-    if isempty(bbox) || any(isnan(bbox))
+    if isempty(polygon) || any(isnan(polygon(:)))
         return;
     end
 
-    rowMin = max(1, bbox(1));
-    rowMax = min(size(img, 1), bbox(2));
-    colMin = max(1, bbox(3));
-    colMax = min(size(img, 2), bbox(4));
+    for cornerIdx = 1:size(polygon, 1)
+        nextIdx = mod(cornerIdx, size(polygon, 1)) + 1;
+        overlay = draw_line_segment(overlay, polygon(cornerIdx, :), polygon(nextIdx, :), color);
+    end
+end
 
-    verticalColor = repmat(reshape(color, 1, 1, 3), rowMax - rowMin + 1, 1);
-    horizontalColor = repmat(reshape(color, 1, 1, 3), 1, colMax - colMin + 1);
+function overlay = draw_line_segment(overlay, startPoint, endPoint, color)
+% Rasterize a single line segment between two floating-point vertices.
+    pointCount = max(ceil(max(abs(endPoint - startPoint))), 1) + 1;
+    cols = round(linspace(startPoint(1), endPoint(1), pointCount));
+    rows = round(linspace(startPoint(2), endPoint(2), pointCount));
 
-    overlay(rowMin:rowMax, colMin, :) = verticalColor;
-    overlay(rowMin:rowMax, colMax, :) = verticalColor;
-    overlay(rowMin, colMin:colMax, :) = horizontalColor;
-    overlay(rowMax, colMin:colMax, :) = horizontalColor;
+    validMask = rows >= 1 & rows <= size(overlay, 1) & cols >= 1 & cols <= size(overlay, 2);
+    rows = rows(validMask);
+    cols = cols(validMask);
+
+    if isempty(rows)
+        return;
+    end
+
+    pixelIdx = sub2ind([size(overlay, 1), size(overlay, 2)], rows, cols);
+
+    for channelIdx = 1:size(overlay, 3)
+        channelPlane = overlay(:, :, channelIdx);
+        channelPlane(pixelIdx) = color(channelIdx);
+        overlay(:, :, channelIdx) = channelPlane;
+    end
 end
 
 function rgb = mask_to_rgb(mask)
