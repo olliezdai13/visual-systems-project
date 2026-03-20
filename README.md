@@ -11,7 +11,9 @@ Design of Visual Systems – Spring Term 2026 – Imperial College London
  - India Lloyd-Evans
 
 ## Project Summary
-WIP - Describe what this program does in moderate detail.
+We chose the task of number plate reading. We picked this because there was opportunity to apply our learning of multiple detection methods and colour processing. Challenges we faced in our attempts were largely to do with the different colour contrasts and angular positioning of the number plates in different test images from the dataset – isolating the number plate as a rectangular box amidst shadowing also meant crops became too tight. We employed OCR as the ‘reading’ program, which was somewhat accurate, with slight error in recognising similar characters such as ‘7’ and ‘T’, as well as ‘U’ and ‘V’, but this was not something we could solve further. 
+Overall, we made many attempts with roughly 17 different methods, of which we have documented 10. Our recommendations are that ‘oliver_v4’, ‘lynton_v1’ and ‘india_v9’ demonstrate the best segmentations of the image processing (the former two), with the latter showing an output for number plate reading. 
+
 
 ## INSTRUCTIONS
 
