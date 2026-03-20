@@ -20,5 +20,5 @@ function processedImg = process_image(img)
     % processedImg = india_v1(img);
     % processedImg = oliver_v2(img);
     % processedImg = oliver_v3(img);
-    processedImg = india_v1(img);
+    processedImg = oliver_v4(img);
 end
