@@ -168,5 +168,15 @@ Areas for Improvement:
  - Multi-plate support: Extend the system to handle images containing multiple vehicles.
  - Performance optimisation: Add GPU support for CRAFT and explore newer models such as YOLOv8 for plate detection.
 
+## Team Member Contribution Statements
+
+### India Lloyd-Evans statement of contribution
+
+My attempts of the task involved working backwards from the desired outcome in order to meet my teammates in the middle. As I worked through the code iterations, it became more evident that image preprocessing such as making the image greyscale and toggling the threshold for exposure became necessary to isolate the plate and its characters. As my teammates worked on configurations using boundary detection and text transforms, I looked to methods from YouTube and example projects on MATLAB to identify disruptive techniques such as tracking the distribution of white in an image to get a region of interest (ROI) around the plate. Some projects I found used training data of individual car plate characters which I found interesting but excessive for this task. I found OCR best - next time I would include a confidence score so that the user of the program could quantify the model’s accuracy in reading the plate for troubleshooting and debugging purposes.
+
+### Lynton Sutton statement of contribution
+
+### Oliver Dai statement of contribution
+
 
 
