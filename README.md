@@ -47,6 +47,28 @@ All dataset images go in the `dataset/` folder, which will be **automatically ge
 WIP - Demonstrate our code working with screenshots and descriptions.
 
 ## Analysis
-WIP - A bit of critical analysis of the program's functionality, areas for improvement, practical value, etc…
+What Worked Well:
 
-india was here
+ - Yellow-plate detection using HSV colour masking worked quite well after parameter tuning. Once the correct Hue/Saturation/Value ranges were found, it isolated the plate with minimal noise. 
+ - High-sensitivity adaptive binarization (Sensitivity 0.99) combined with morphological operations effectively removed background noise while preserving characters.
+ - When experimenting with CRAFT, it reliably located the plate region even under moderate angles and varying lighting.
+
+What Didn't Work: 
+
+ - Whilst Yellow-plate detection using HSV colour masking worked well, it was not robust and only worked for 1 test image. When using different data sets the HSV ranges would need to be tuned. An adaptive version would be necessary.
+ - For OCR to correctly read the number plate, the characters of the plate would need to be perfectly isolated, any noise or additional 'blobs' would lead to errors or partial readings.
+ - Hough transform was not able to identify vertical lines
+ - White front plates proved significantly harder than yellow rear plates because of similarity to car body paint and reflections
+ - Purely rule-based methods (HSV + morphology) struggled with strong parallax and diverse lighting conditions
+
+Areas for Improvement: 
+
+ - Full automation of region selection: develop a scoring system that combines CRAFT confidence, aspect ratio, and plate-like shape.
+ - Perspective correction: Automatically detect and unwarp trapezoidal plates caused by side angles (currently only basic deskewing is used).
+ - Hybrid OCR engine: Integrate EasyOCR or PaddleOCR (via Python) for higher character recognition accuracy on challenging plates.
+ - Multi-plate support: Extend the system to handle images containing multiple vehicles.
+ - Performance optimisation: Add GPU support for CRAFT and explore newer models such as YOLOv8 for plate detection.
+
+
+
+
