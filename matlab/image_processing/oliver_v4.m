@@ -21,7 +21,8 @@ function result = oliver_v4(img)
     end
 
     croppedComponent = crop_selected_component_block(img, bestMask, selectedRotatedBox);
-    result = render_selected_component_block(img, segmentedRGB, bestMask, croppedComponent, bestClusterIdx, bestStats, selectedRotatedBox);
+    ocrText = ocr_license_plate_block(croppedComponent);
+    result = render_selected_component_block(img, segmentedRGB, bestMask, croppedComponent, ocrText, bestClusterIdx, bestStats, selectedRotatedBox);
 end
 
 function [clusterLabels, segmentedRGB] = kmeans_segmentation_block(img)
@@ -178,7 +179,7 @@ function croppedComponent = crop_selected_component_block(img, bestMask, rotated
     title('Original | Rotated bounding box | Selected component | Deskewed rotated-box crop');
 end
 
-function result = render_selected_component_block(img, segmentedRGB, bestMask, croppedComponent, bestClusterIdx, bestStats, rotatedBox)
+function result = render_selected_component_block(img, segmentedRGB, bestMask, croppedComponent, ocrText, bestClusterIdx, bestStats, rotatedBox)
 % Return the final selected component crop and show the overall extraction summary.
     maskedComponent = apply_mask_to_image(img, bestMask);
     result = croppedComponent;
@@ -195,14 +196,259 @@ function result = render_selected_component_block(img, segmentedRGB, bestMask, c
     end
 
     bboxOverlay = draw_polygon_overlay(img, rotatedBox, [0 1 0]);
-    resultTitle = sprintf('Selected cluster %d | aspect %.2f | rotated fill %.2f | area %.3f', ...
-        bestClusterIdx, bestStats.aspectRatio, bestStats.rotatedFillRatio, bestStats.areaFraction);
+    resultTitle = sprintf('Selected cluster %d | aspect %.2f | rotated fill %.2f | area %.3f | OCR %s', ...
+        bestClusterIdx, bestStats.aspectRatio, bestStats.rotatedFillRatio, bestStats.areaFraction, fallback_ocr_text(ocrText));
 
     figure('Name', 'oliver_v4 - Final Selected Segment', 'NumberTitle', 'off');
     montage({im2uint8(img), segmentedRGB, im2uint8(bboxOverlay), maskedComponent, finalPreview}, ...
         'Size', [1 5], ...
         'BackgroundColor', 'white', 'BorderSize', 8);
     title(['Original | K-means labels | Rotated-box overlay | Selected component | ' resultTitle]);
+end
+
+function bestText = ocr_license_plate_block(croppedComponent)
+% Run OCR on the deskewed crop using grayscale and binary plate-friendly variants.
+    bestText = '';
+
+    if isempty(croppedComponent)
+        return;
+    end
+
+    cropRgb = im2uint8(croppedComponent);
+    enlargedCrop = imresize(cropRgb, 3);
+    grayCrop = rgb2gray(enlargedCrop);
+    contrastCrop = imadjust(grayCrop);
+    smoothedCrop = medfilt2(contrastCrop, [3 3]);
+    otsuThreshold = graythresh(smoothedCrop);
+    binaryCrop = imbinarize(smoothedCrop, otsuThreshold);
+    binaryInvertedCrop = imcomplement(binaryCrop);
+    adaptiveBinaryCrop = imbinarize(smoothedCrop, 'adaptive', 'Sensitivity', 0.45);
+    adaptiveBinaryInvertedCrop = imcomplement(adaptiveBinaryCrop);
+    equalizedCrop = histeq(grayCrop);
+    laplacianResponse = imfilter(im2double(equalizedCrop), fspecial('laplacian', 0.2), 'replicate');
+    sharpenedCrop = im2uint8(min(max(im2double(equalizedCrop) - 0.7 * laplacianResponse, 0), 1));
+    sharpenedCrop = imadjust(sharpenedCrop);
+    sharpenedBinaryCrop = imbinarize(sharpenedCrop, graythresh(sharpenedCrop));
+    sharpenedBinaryInvertedCrop = imcomplement(sharpenedBinaryCrop);
+
+    [grayText, grayScore, grayDebug] = run_plate_ocr_candidate(smoothedCrop, 'grayscale');
+    [binaryText, binaryScore, binaryDebug] = run_plate_ocr_candidate(binaryCrop, 'binary-otsu');
+    [invertedText, invertedScore, invertedDebug] = run_plate_ocr_candidate(binaryInvertedCrop, 'binary-otsu-inverted');
+    [adaptiveText, adaptiveScore, adaptiveDebug] = run_plate_ocr_candidate(adaptiveBinaryCrop, 'binary-adaptive');
+    [adaptiveInvText, adaptiveInvScore, adaptiveInvDebug] = run_plate_ocr_candidate(adaptiveBinaryInvertedCrop, 'binary-adaptive-inverted');
+    [equalizedText, equalizedScore, equalizedDebug] = run_plate_ocr_candidate(equalizedCrop, 'equalized-gray');
+    [sharpenedText, sharpenedScore, sharpenedDebug] = run_plate_ocr_candidate(sharpenedCrop, 'sharpened-gray');
+    [sharpenedBinaryText, sharpenedBinaryScore, sharpenedBinaryDebug] = run_plate_ocr_candidate(sharpenedBinaryCrop, 'sharpened-binary');
+    [sharpenedInvText, sharpenedInvScore, sharpenedInvDebug] = run_plate_ocr_candidate(sharpenedBinaryInvertedCrop, 'sharpened-binary-inverted');
+
+    bestText = grayText;
+    bestScore = grayScore;
+
+    if binaryScore > bestScore
+        bestText = binaryText;
+        bestScore = binaryScore;
+    end
+
+    if invertedScore > bestScore
+        bestText = invertedText;
+        bestScore = invertedScore;
+    end
+
+    if adaptiveScore > bestScore
+        bestText = adaptiveText;
+        bestScore = adaptiveScore;
+    end
+
+    if adaptiveInvScore > bestScore
+        bestText = adaptiveInvText;
+        bestScore = adaptiveInvScore;
+    end
+
+    if equalizedScore > bestScore
+        bestText = equalizedText;
+        bestScore = equalizedScore;
+    end
+
+    if sharpenedScore > bestScore
+        bestText = sharpenedText;
+        bestScore = sharpenedScore;
+    end
+
+    if sharpenedBinaryScore > bestScore
+        bestText = sharpenedBinaryText;
+        bestScore = sharpenedBinaryScore;
+    end
+
+    if sharpenedInvScore > bestScore
+        bestText = sharpenedInvText;
+        bestScore = sharpenedInvScore;
+    end
+
+    fprintf('oliver_v4 OCR debug:\n');
+    print_ocr_image_stats('crop-rgb', cropRgb);
+    print_ocr_image_stats('gray', grayCrop);
+    print_ocr_image_stats('contrast-median', smoothedCrop);
+    print_ocr_image_stats('binary-otsu', binaryCrop);
+    print_ocr_image_stats('binary-adaptive', adaptiveBinaryCrop);
+    print_ocr_image_stats('equalized', equalizedCrop);
+    print_ocr_image_stats('sharpened', sharpenedCrop);
+    print_ocr_debug(grayDebug);
+    print_ocr_debug(binaryDebug);
+    print_ocr_debug(invertedDebug);
+    print_ocr_debug(adaptiveDebug);
+    print_ocr_debug(adaptiveInvDebug);
+    print_ocr_debug(equalizedDebug);
+    print_ocr_debug(sharpenedDebug);
+    print_ocr_debug(sharpenedBinaryDebug);
+    print_ocr_debug(sharpenedInvDebug);
+    fprintf('  selected result: %s\n', fallback_ocr_text(bestText));
+
+    grayPreview = repmat(grayCrop, [1 1 3]);
+    contrastPreview = repmat(smoothedCrop, [1 1 3]);
+    binaryPreview = repmat(uint8(binaryCrop) * 255, [1 1 3]);
+    invertedPreview = repmat(uint8(binaryInvertedCrop) * 255, [1 1 3]);
+    adaptivePreview = repmat(uint8(adaptiveBinaryCrop) * 255, [1 1 3]);
+    adaptiveInvPreview = repmat(uint8(adaptiveBinaryInvertedCrop) * 255, [1 1 3]);
+    equalizedPreview = repmat(equalizedCrop, [1 1 3]);
+    sharpenedPreview = repmat(sharpenedCrop, [1 1 3]);
+    sharpenedBinaryPreview = repmat(uint8(sharpenedBinaryCrop) * 255, [1 1 3]);
+    sharpenedInvPreview = repmat(uint8(sharpenedBinaryInvertedCrop) * 255, [1 1 3]);
+
+    figure('Name', 'oliver_v4 - OCR', 'NumberTitle', 'off');
+    montage({cropRgb, enlargedCrop, grayPreview, contrastPreview, binaryPreview, invertedPreview, ...
+        adaptivePreview, adaptiveInvPreview, equalizedPreview, sharpenedPreview, sharpenedBinaryPreview, sharpenedInvPreview}, ...
+        'Size', [3 4], ...
+        'BackgroundColor', 'white', 'BorderSize', 8);
+    title(sprintf('Crop | 3x resize | Gray | Contrast + median | Otsu | Otsu inv | Adaptive | Adaptive inv | Equalized | Sharpened | Sharp bin | Sharp bin inv | OCR: %s', ...
+        fallback_ocr_text(bestText)));
+
+    if isempty(bestText)
+        fprintf('oliver_v4 OCR: no convincing plate text detected.\n');
+    else
+        fprintf('oliver_v4 OCR: %s\n', bestText);
+    end
+end
+
+function [cleanedText, score, debugInfo] = run_plate_ocr_candidate(ocrInput, label)
+% Restrict OCR to uppercase letters and digits, then score by confidence and text length.
+    cleanedText = '';
+    score = -Inf;
+    debugInfo = struct( ...
+        'label', label, ...
+        'rawText', '', ...
+        'cleanedText', '', ...
+        'meanConfidence', NaN, ...
+        'score', -Inf, ...
+        'characterCount', 0, ...
+        'wordCount', 0, ...
+        'status', 'not-run');
+
+    try
+        result = ocr(ocrInput, ...
+            'CharacterSet', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', ...
+            'LayoutAnalysis', 'line');
+    catch ME
+        debugInfo.status = sprintf('failed: %s', ME.message);
+        return;
+    end
+
+    rawText = strtrim(result.Text);
+    cleanedText = clean_plate_text(rawText);
+    debugInfo.rawText = rawText;
+    debugInfo.cleanedText = cleanedText;
+    debugInfo.status = 'ok';
+
+    if isprop(result, 'Words')
+        debugInfo.wordCount = numel(result.Words);
+    end
+
+    if isempty(cleanedText)
+        score = -Inf;
+        debugInfo.score = score;
+        return;
+    end
+
+    if isprop(result, 'CharacterConfidences')
+        confidences = double(result.CharacterConfidences);
+        confidences = confidences(isfinite(confidences));
+    else
+        confidences = [];
+    end
+
+    if isempty(confidences)
+        meanConfidence = 0;
+    else
+        meanConfidence = mean(confidences);
+    end
+
+    debugInfo.meanConfidence = meanConfidence;
+    debugInfo.characterCount = numel(cleanedText);
+    score = meanConfidence + 0.05 * min(numel(cleanedText), 10);
+    debugInfo.score = score;
+end
+
+function cleanedText = clean_plate_text(rawText)
+% Normalize OCR output to a compact uppercase alphanumeric plate string.
+    cleanedText = upper(regexprep(rawText, '[^A-Z0-9]', ''));
+
+    if isempty(cleanedText)
+        return;
+    end
+
+    cleanedText = regexprep(cleanedText, '^0+', '');
+    cleanedText = regexprep(cleanedText, 'O(?=[0-9])', '0');
+    cleanedText = regexprep(cleanedText, '(?<=[0-9])O', '0');
+    cleanedText = regexprep(cleanedText, 'I(?=[0-9])', '1');
+    cleanedText = regexprep(cleanedText, '(?<=[0-9])[IL]', '1');
+end
+
+function displayText = fallback_ocr_text(ocrText)
+% Keep figure titles readable when OCR does not return anything useful.
+    if isempty(ocrText)
+        displayText = 'none';
+    else
+        displayText = ocrText;
+    end
+end
+
+function print_ocr_debug(debugInfo)
+% Print one compact OCR diagnostic line for a candidate input.
+    fprintf('  [%s] status=%s | raw=\"%s\" | cleaned=\"%s\" | meanConf=%.3f | chars=%d | words=%d | score=%.3f\n', ...
+        debugInfo.label, ...
+        debugInfo.status, ...
+        debugInfo.rawText, ...
+        fallback_ocr_text(debugInfo.cleanedText), ...
+        sanitize_debug_number(debugInfo.meanConfidence), ...
+        debugInfo.characterCount, ...
+        debugInfo.wordCount, ...
+        sanitize_debug_number(debugInfo.score));
+end
+
+function print_ocr_image_stats(label, img)
+% Print compact image diagnostics to explain why OCR may be failing.
+    if islogical(img)
+        nonzeroFraction = nnz(img) / numel(img);
+        fprintf('  [stats:%s] size=%dx%d | foreground=%.3f\n', ...
+            label, size(img, 2), size(img, 1), nonzeroFraction);
+        return;
+    end
+
+    grayImg = img;
+    if ndims(img) == 3
+        grayImg = rgb2gray(img);
+    end
+
+    grayDouble = im2double(grayImg);
+    fprintf('  [stats:%s] size=%dx%d | min=%.3f | max=%.3f | mean=%.3f | std=%.3f\n', ...
+        label, size(grayImg, 2), size(grayImg, 1), ...
+        min(grayDouble(:)), max(grayDouble(:)), mean(grayDouble(:)), std(grayDouble(:)));
+end
+
+function value = sanitize_debug_number(value)
+% Keep debug output readable when values are NaN or Inf.
+    if ~isfinite(value)
+        value = -1;
+    end
 end
 
 function segmentedTiles = build_segment_tiles(img, clusterLabels, clusterCount)
