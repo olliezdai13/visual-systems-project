@@ -20,7 +20,8 @@ function result = oliver_v4(img)
         selectedRotatedBox = rotatedBoxes{bestClusterIdx};
     end
 
-    result = render_selected_component_block(img, segmentedRGB, bestMask, bestClusterIdx, bestStats, selectedRotatedBox);
+    croppedComponent = crop_selected_component_block(img, bestMask, selectedRotatedBox);
+    result = render_selected_component_block(img, segmentedRGB, bestMask, croppedComponent, bestClusterIdx, bestStats, selectedRotatedBox);
 end
 
 function [clusterLabels, segmentedRGB] = kmeans_segmentation_block(img)
@@ -152,14 +153,45 @@ function [rotatedBoxes, rotatedFillRatios, bestClusterIdx] = rotated_bbox_candid
     end
 end
 
-function result = render_selected_component_block(img, segmentedRGB, bestMask, bestClusterIdx, bestStats, rotatedBox)
-% Return the selected segmented region and show the final extraction.
-    result = img;
+function croppedComponent = crop_selected_component_block(img, bestMask, rotatedBox)
+% Crop the selected rotated rectangle and deskew it to horizontal.
+    maskedComponent = apply_mask_to_image(img, bestMask);
+    croppedComponent = [];
 
-    for channelIdx = 1:size(img, 3)
-        channelPlane = result(:, :, channelIdx);
-        channelPlane(~bestMask) = 0;
-        result(:, :, channelIdx) = channelPlane;
+    if ~isempty(rotatedBox)
+        [cropWidth, cropHeight] = rotated_box_size(rotatedBox);
+        if cropWidth > 0 && cropHeight > 0
+            croppedComponent = sample_rotated_rectangle(img, rotatedBox, cropWidth, cropHeight);
+        end
+    end
+
+    bboxOverlay = draw_polygon_overlay(img, rotatedBox, [0 1 0]);
+    cropPreview = croppedComponent;
+    if isempty(cropPreview)
+        cropPreview = maskedComponent;
+    end
+
+    figure('Name', 'oliver_v4 - Final Crop', 'NumberTitle', 'off');
+    montage({im2uint8(img), im2uint8(bboxOverlay), maskedComponent, cropPreview}, ...
+        'Size', [1 4], ...
+        'BackgroundColor', 'white', 'BorderSize', 8);
+    title('Original | Rotated bounding box | Selected component | Deskewed rotated-box crop');
+end
+
+function result = render_selected_component_block(img, segmentedRGB, bestMask, croppedComponent, bestClusterIdx, bestStats, rotatedBox)
+% Return the final selected component crop and show the overall extraction summary.
+    maskedComponent = apply_mask_to_image(img, bestMask);
+    result = croppedComponent;
+    finalPreview = croppedComponent;
+
+    if isempty(finalPreview)
+        finalPreview = maskedComponent;
+        result = maskedComponent;
+    end
+
+    if ~any(bestMask(:)) && isempty(croppedComponent)
+        finalPreview = img;
+        result = img;
     end
 
     bboxOverlay = draw_polygon_overlay(img, rotatedBox, [0 1 0]);
@@ -167,10 +199,10 @@ function result = render_selected_component_block(img, segmentedRGB, bestMask, b
         bestClusterIdx, bestStats.aspectRatio, bestStats.rotatedFillRatio, bestStats.areaFraction);
 
     figure('Name', 'oliver_v4 - Final Selected Segment', 'NumberTitle', 'off');
-    montage({im2uint8(img), segmentedRGB, bboxOverlay, result}, ...
-        'Size', [1 4], ...
+    montage({im2uint8(img), segmentedRGB, im2uint8(bboxOverlay), maskedComponent, finalPreview}, ...
+        'Size', [1 5], ...
         'BackgroundColor', 'white', 'BorderSize', 8);
-    title(['Original | K-means labels | Selected component overlay | ' resultTitle]);
+    title(['Original | K-means labels | Rotated-box overlay | Selected component | ' resultTitle]);
 end
 
 function segmentedTiles = build_segment_tiles(img, clusterLabels, clusterCount)
@@ -330,6 +362,90 @@ function fillRatio = compute_rotated_fill_ratio(componentMask, rotatedArea)
     fillRatio = nnz(componentMask) / rotatedArea;
 end
 
+function [cropWidth, cropHeight] = rotated_box_size(rotatedBox)
+% Estimate the axis-aligned crop size implied by the rotated rectangle edges.
+    cropWidth = 0;
+    cropHeight = 0;
+
+    if isempty(rotatedBox) || size(rotatedBox, 1) < 4
+        return;
+    end
+
+    topWidth = norm(rotatedBox(2, :) - rotatedBox(1, :));
+    bottomWidth = norm(rotatedBox(3, :) - rotatedBox(4, :));
+    leftHeight = norm(rotatedBox(4, :) - rotatedBox(1, :));
+    rightHeight = norm(rotatedBox(3, :) - rotatedBox(2, :));
+
+    cropWidth = max(1, round(mean([topWidth, bottomWidth])) + 1);
+    cropHeight = max(1, round(mean([leftHeight, rightHeight])) + 1);
+end
+
+function croppedImg = sample_rotated_rectangle(img, rotatedBox, cropWidth, cropHeight)
+% Reverse-map the rotated rectangle into a horizontal crop using affine sampling.
+    croppedImg = zeros(cropHeight, cropWidth, size(img, 3), 'like', img);
+
+    if isempty(rotatedBox) || cropWidth <= 0 || cropHeight <= 0
+        return;
+    end
+
+    % compute_rotated_bbox returns corners in image order:
+    % [bottom-left; bottom-right; top-right; top-left].
+    sourceTriangle = [ ...
+        rotatedBox(4, 1), rotatedBox(4, 2), 1; ...
+        rotatedBox(3, 1), rotatedBox(3, 2), 1; ...
+        rotatedBox(1, 1), rotatedBox(1, 2), 1].';
+    destinationTriangle = [ ...
+        1, 1, 1; ...
+        cropWidth, 1, 1; ...
+        1, cropHeight, 1].';
+
+    destinationToSource = sourceTriangle * inv(destinationTriangle);
+
+    [destCols, destRows] = meshgrid(1:cropWidth, 1:cropHeight);
+    destinationHomogeneous = [destCols(:).'; destRows(:).'; ones(1, numel(destCols))];
+    sourceCoords = destinationToSource * destinationHomogeneous;
+
+    sourceCols = reshape(sourceCoords(1, :), cropHeight, cropWidth);
+    sourceRows = reshape(sourceCoords(2, :), cropHeight, cropWidth);
+    croppedImg = bilinear_sample_image(img, sourceRows, sourceCols);
+end
+
+function sampledImg = bilinear_sample_image(img, sampleRows, sampleCols)
+% Bilinearly sample an RGB image at floating-point row/column locations.
+    imageHeight = size(img, 1);
+    imageWidth = size(img, 2);
+    channelCount = size(img, 3);
+    sampledImgDouble = zeros(size(sampleRows, 1), size(sampleRows, 2), channelCount);
+
+    validMask = sampleRows >= 1 & sampleRows <= imageHeight & sampleCols >= 1 & sampleCols <= imageWidth;
+    sampleRows = min(max(sampleRows, 1), imageHeight);
+    sampleCols = min(max(sampleCols, 1), imageWidth);
+
+    rowFloor = floor(sampleRows);
+    rowCeil = min(rowFloor + 1, imageHeight);
+    colFloor = floor(sampleCols);
+    colCeil = min(colFloor + 1, imageWidth);
+
+    rowWeight = sampleRows - rowFloor;
+    colWeight = sampleCols - colFloor;
+
+    for channelIdx = 1:channelCount
+        channelPlane = double(img(:, :, channelIdx));
+        topLeft = channelPlane(sub2ind([imageHeight, imageWidth], rowFloor, colFloor));
+        topRight = channelPlane(sub2ind([imageHeight, imageWidth], rowFloor, colCeil));
+        bottomLeft = channelPlane(sub2ind([imageHeight, imageWidth], rowCeil, colFloor));
+        bottomRight = channelPlane(sub2ind([imageHeight, imageWidth], rowCeil, colCeil));
+
+        topBlend = (1 - colWeight) .* topLeft + colWeight .* topRight;
+        bottomBlend = (1 - colWeight) .* bottomLeft + colWeight .* bottomRight;
+        sampledChannel = (1 - rowWeight) .* topBlend + rowWeight .* bottomBlend;
+        sampledChannel(~validMask) = 0;
+        sampledImgDouble(:, :, channelIdx) = sampledChannel;
+    end
+
+    sampledImg = cast_to_image_class(sampledImgDouble, img);
+end
+
 function score = score_component(stats)
 % Prefer plate-like rectangles: wide, compact, and not too small or large.
     targetAspect = 4.0;
@@ -407,6 +523,30 @@ end
 function rgb = mask_to_rgb(mask)
 % Convert a logical mask into a 3-channel preview for montage.
     rgb = repmat(im2uint8(mask), [1 1 3]);
+end
+
+function maskedImg = apply_mask_to_image(img, mask)
+% Zero everything outside the selected logical mask.
+    maskedImg = img;
+
+    for channelIdx = 1:size(img, 3)
+        channelPlane = maskedImg(:, :, channelIdx);
+        channelPlane(~mask) = 0;
+        maskedImg(:, :, channelIdx) = channelPlane;
+    end
+end
+
+function castImg = cast_to_image_class(imgDouble, referenceImg)
+% Cast floating-point sampled values back to the input image class.
+    if isa(referenceImg, 'uint8')
+        castImg = uint8(min(max(round(imgDouble), 0), 255));
+    elseif isa(referenceImg, 'uint16')
+        castImg = uint16(min(max(round(imgDouble), 0), 65535));
+    elseif isa(referenceImg, 'single')
+        castImg = single(imgDouble);
+    else
+        castImg = cast(imgDouble, 'like', referenceImg);
+    end
 end
 
 function stats = default_stats()
