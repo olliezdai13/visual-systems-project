@@ -1,16 +1,22 @@
 function result = oliver_v4(img)
-% K-means plate candidate selection using simplified rectangle scoring.
+% K-means plate candidate selection using rotated-box fill for the final pick.
 
     validateattributes(img, {'uint8', 'uint16', 'single', 'double'}, ...
         {'nonempty', 'size', [NaN NaN 3]}, mfilename, 'img');
 
     [clusterLabels, segmentedRGB] = kmeans_segmentation_block(img);
     nonRedMask = exclude_red_components_block(img);
-    [bestMask, bestClusterIdx, bestStats, bestComponentMasks] = select_plate_component_block(img, clusterLabels, nonRedMask);
-    rotatedBoxes = rotated_bbox_candidates_block(bestComponentMasks);
+    [componentMasks, componentStatsList] = select_plate_component_block(img, clusterLabels, nonRedMask);
+    [rotatedBoxes, rotatedFillRatios, bestClusterIdx] = rotated_bbox_candidates_block(componentMasks);
 
+    bestMask = false(size(clusterLabels));
+    bestStats = default_stats();
     selectedRotatedBox = [];
+
     if bestClusterIdx > 0
+        bestMask = componentMasks{bestClusterIdx};
+        bestStats = componentStatsList{bestClusterIdx};
+        bestStats.rotatedFillRatio = rotatedFillRatios(bestClusterIdx);
         selectedRotatedBox = rotatedBoxes{bestClusterIdx};
     end
 
@@ -63,15 +69,12 @@ function nonRedMask = exclude_red_components_block(img)
     title('Original | Hue | Saturation | Value | Explicit red mask | Red-suppressed image');
 end
 
-function [bestMask, bestClusterIdx, bestStats, bestComponentMasks] = select_plate_component_block(img, clusterLabels, nonRedMask)
-% Score k-means cluster components by simple rectangular geometry after red suppression.
+function [bestComponentMasks, bestComponentStats] = select_plate_component_block(img, clusterLabels, nonRedMask)
+% Pick one strong candidate component from each cluster after red suppression.
     clusterCount = max(clusterLabels(:));
     imageArea = size(img, 1) * size(img, 2);
-    bestScore = -Inf;
-    bestMask = false(size(clusterLabels));
-    bestClusterIdx = 0;
-    bestStats = default_stats();
     bestComponentMasks = cell(1, clusterCount);
+    bestComponentStats = cell(1, clusterCount);
 
     clusterPreviewTiles = cell(1, clusterCount);
     processedPreviewTiles = cell(1, clusterCount);
@@ -85,18 +88,7 @@ function [bestMask, bestClusterIdx, bestStats, bestComponentMasks] = select_plat
         processedPreviewTiles{clusterIdx} = mask_to_rgb(processedMask);
         candidatePreviewTiles{clusterIdx} = mask_to_rgb(candidateMask);
         bestComponentMasks{clusterIdx} = candidateMask;
-
-        if candidateStats.score > bestScore
-            bestScore = candidateStats.score;
-            bestMask = candidateMask;
-            bestClusterIdx = clusterIdx;
-            bestStats = candidateStats;
-        end
-    end
-
-    if bestClusterIdx == 0
-        bestMask = false(size(clusterLabels));
-        bestStats = default_stats();
+        bestComponentStats{clusterIdx} = candidateStats;
     end
 
     figure('Name', 'oliver_v4 - Plate Component Selection - Filtered Clusters', 'NumberTitle', 'off');
@@ -119,23 +111,45 @@ function [bestMask, bestClusterIdx, bestStats, bestComponentMasks] = select_plat
 
 end
 
-function rotatedBoxes = rotated_bbox_candidates_block(componentMasks)
-% Compute and display rotated bounding boxes for each selected cluster component.
+function [rotatedBoxes, rotatedFillRatios, bestClusterIdx] = rotated_bbox_candidates_block(componentMasks)
+% Compute rotated bounding boxes and select the candidate with the best fill.
     clusterCount = numel(componentMasks);
     rotatedBoxes = cell(1, clusterCount);
+    rotatedFillRatios = -Inf(1, clusterCount);
+    bestClusterIdx = 0;
+    bestFillRatio = -Inf;
     overlayTiles = cell(1, clusterCount);
 
     for clusterIdx = 1:clusterCount
         componentMask = componentMasks{clusterIdx};
-        rotatedBoxes{clusterIdx} = compute_rotated_bbox(componentMask);
-        overlayTiles{clusterIdx} = draw_polygon_overlay(mask_to_rgb(componentMask), rotatedBoxes{clusterIdx}, [0 1 0]);
+        [rotatedBoxes{clusterIdx}, rotatedArea] = compute_rotated_bbox(componentMask);
+        rotatedFillRatios(clusterIdx) = compute_rotated_fill_ratio(componentMask, rotatedArea);
+        if rotatedFillRatios(clusterIdx) > bestFillRatio
+            bestFillRatio = rotatedFillRatios(clusterIdx);
+            bestClusterIdx = clusterIdx;
+        end
+    end
+
+    for clusterIdx = 1:clusterCount
+        overlayColor = [0 1 0];
+        if clusterIdx == bestClusterIdx
+            overlayColor = [1 0 0];
+        end
+
+        overlayTiles{clusterIdx} = draw_polygon_overlay(mask_to_rgb(componentMasks{clusterIdx}), rotatedBoxes{clusterIdx}, overlayColor);
     end
 
     figure('Name', 'oliver_v4 - Rotated Bounding Boxes', 'NumberTitle', 'off');
     montage(overlayTiles, ...
         'Size', [2 4], ...
         'BackgroundColor', 'white', 'BorderSize', 8);
-    title('Best component per cluster with rotated bounding-box overlays');
+
+    if bestClusterIdx > 0
+        title(sprintf('Best component per cluster with rotated-box overlays | selected cluster %d | best fill %.2f', ...
+            bestClusterIdx, bestFillRatio));
+    else
+        title('Best component per cluster with rotated-box overlays | no valid rotated fill found');
+    end
 end
 
 function result = render_selected_component_block(img, segmentedRGB, bestMask, bestClusterIdx, bestStats, rotatedBox)
@@ -149,8 +163,8 @@ function result = render_selected_component_block(img, segmentedRGB, bestMask, b
     end
 
     bboxOverlay = draw_polygon_overlay(img, rotatedBox, [0 1 0]);
-    resultTitle = sprintf('Selected cluster %d | aspect %.2f | fill %.2f | area %.3f', ...
-        bestClusterIdx, bestStats.aspectRatio, bestStats.fillRatio, bestStats.areaFraction);
+    resultTitle = sprintf('Selected cluster %d | aspect %.2f | rotated fill %.2f | area %.3f', ...
+        bestClusterIdx, bestStats.aspectRatio, bestStats.rotatedFillRatio, bestStats.areaFraction);
 
     figure('Name', 'oliver_v4 - Final Selected Segment', 'NumberTitle', 'off');
     montage({im2uint8(img), segmentedRGB, bboxOverlay, result}, ...
@@ -257,9 +271,10 @@ function stats = compute_component_stats(pixelIdxList, imageSize, imageArea)
     stats.widthFraction = width / imageSize(2);
 end
 
-function rotatedBox = compute_rotated_bbox(componentMask)
+function [rotatedBox, rotatedArea] = compute_rotated_bbox(componentMask)
 % Estimate a minimum-area rotated rectangle from the component orientation.
     rotatedBox = [];
+    rotatedArea = 0;
 
     if ~any(componentMask(:))
         return;
@@ -289,6 +304,7 @@ function rotatedBox = compute_rotated_bbox(componentMask)
     maxX = max(alignedPoints(1, :));
     minY = min(alignedPoints(2, :));
     maxY = max(alignedPoints(2, :));
+    rotatedArea = (maxX - minX) * (maxY - minY);
 
     alignedCorners = [ ...
         minX, minY; ...
@@ -302,6 +318,16 @@ function rotatedBox = compute_rotated_bbox(componentMask)
     rotatedX = restoredCorners(1, :).'+ centroid(1);
     rotatedY = -restoredCorners(2, :).'+ centroid(2);
     rotatedBox = [rotatedX, rotatedY];
+end
+
+function fillRatio = compute_rotated_fill_ratio(componentMask, rotatedArea)
+% Measure how tightly the component fills its rotated bounding rectangle.
+    if ~any(componentMask(:)) || rotatedArea <= 0
+        fillRatio = -Inf;
+        return;
+    end
+
+    fillRatio = nnz(componentMask) / rotatedArea;
 end
 
 function score = score_component(stats)
@@ -393,6 +419,7 @@ function stats = default_stats()
         'height', 0, ...
         'aspectRatio', 0, ...
         'fillRatio', 0, ...
+        'rotatedFillRatio', 0, ...
         'areaFraction', 0, ...
         'widthFraction', 0);
 end
