@@ -61,31 +61,31 @@ Then the user selects an image to process from the dataset directory.
 
 This version excels at license plate detection and cropping. It has a high success rate at detecting the correct bounding box and rotating it to be horizontal. It makes an attempt at loading Matlab's built-in OCR model to read the license plate, but the result was ultimately very inconsistent.
 
-> The original image, and the final cropped license plate region.\
+> The original image, and the final cropped license plate region.
 <img src="./assets/demo-oliverv4-result.png">
 
-> Step 1: k-means segmentation into 8 segments\
+> Step 1: k-means segmentation into 8 segments
 <img src="./assets/demo-oliverv4-kmeans.png">
 
-> Step 2: split up k-means segments\
+> Step 2: split up k-means segments
 <img src="./assets/demo-oliverv4-kmeans2.png">
 
-> Step 3: threshold, filter, and fill k-means segments\
+> Step 3: threshold, filter, and fill k-means segments
 <img src="./assets/demo-oliverv4-filter-and-fill.png">
 
-> Step 4: select best connected component based on a weighted score of aspect ratio, bounding box fill, and size.\
+> Step 4: select best connected component based on a weighted score of aspect ratio, bounding box fill, and size.
 <img src="./assets/demo-oliverv4-best-component.png">
 
-> Step 5: calculate the best rotated bounding box around the components, and select the one with the best fill.\
+> Step 5: calculate the best rotated bounding box around the components, and select the one with the best fill.
 <img src="./assets/demo-oliverv4-rotated-bound.png">
 
-> Step 6: crop the best connected component, and rotate such that the rotated bounding box lies horizontally.\
+> Step 6: crop the best connected component, and rotate such that the rotated bounding box lies horizontally.
 <img src="./assets/demo-oliverv4-crop.png">
 
-> Step 7: create many variations of license plates with different image processing steps.\
+> Step 7: create many variations of license plates with different image processing steps.
 <img src="./assets/demo-oliverv4-ocr-variations.png">
 
-> Step 8: run built-in OCR model.\
+> Step 8: run built-in OCR model.
 <img src="./assets/demo-oliverv4-ocr-result.png">
 
 **Result: 785TKT686**
@@ -95,33 +95,50 @@ This version excels at license plate detection and cropping. It has a high succe
 
 india's description here TODO...
 
-> The original image, and the final cropped license plate region.\
+> The original image, and the final cropped license plate region.
 <img src="./assets/demo-indiav9-result.png">
 
-> Step 1: greyscale and pre-processing\
+> Step 1: greyscale and pre-processing
 <img src="./assets/demo-indiav9-2.png">
 
-> Step 2: sobel edge detection, yellow mask, and white mask\
+> Step 2: sobel edge detection, yellow mask, and white mask
 <img src="./assets/demo-indiav9-3.png">
 
-> Step 3: plate candidate selection and binarization\
+> Step 3: plate candidate selection and binarization
 <img src="./assets/demo-indiav9-4.png">
 
-> Step 4: INDIA TODO...\
+> Step 4: INDIA TODO...
 <img src="./assets/demo-indiav9-5.png">
 
 > Step 5: find individual character blobs
 <img src="./assets/demo-indiav9-6.png">
 
-> Step 6: threshold and upscale for OCR\
+> Step 6: threshold and upscale for OCR
 <img src="./assets/demo-indiav9-7.png">
 
-> Step 7: run OCR\
+> Step 7: run OCR
 <img src="./assets/demo-indiav9-8.png">
 
 **Result: 171NUX75**\
 Almost perfect, but it mistook "V" for a "U".
 
+### Version: lynton_v3
+
+lynton's description here TODO...
+
+> The original image, and the final cropped, deskewed, and cleaned image with correct output license plate reading.
+<img src="./assets/demo-lynton1.png">
+
+> HSV color mask (yellow and white masks processed in parallel). Selects the most plate-like mask.
+<img src="./assets/demo-lynton4.png">
+
+> Initial plate boundary selection, padding, cropping, and deskewing.
+<img src="./assets/demo-lynton2.png">
+
+> Increase contrast and brightness. Binarize, dilate, erode, and close for image  TODO lynton.
+<img src="./assets/demo-lynton3.png">
+
+**Result: KPI4KYJ**\
 
 ## Analysis
 What Worked Well:
