@@ -126,7 +126,7 @@ Almost perfect, but it mistook "V" for a "U".
 
 ### Version: lynton_v3
 
-lynton's description here TODO...
+This code used a basic yellow/white HSV filter to create a mask, then chooses the most rectangular (i.e. license-plate) shape. It then crops the image according to the mask, then runs a series of image processing steps to show just the text of the number plate, and finally runs the 'OCR' function (computer vision toolbox) to read the text and return the alphanumeric value of the license plate. 
 
 > The original image, and the final cropped, deskewed, and cleaned image with correct output license plate reading.
 <img src="./assets/demo-lynton1.png">
@@ -137,7 +137,7 @@ lynton's description here TODO...
 > Initial plate boundary selection, padding, cropping, and deskewing.
 <img src="./assets/demo-lynton2.png">
 
-> Increase contrast and brightness. Binarize, dilate, erode, and close for image  TODO lynton.
+> Increase contrast and brightness. Binarize, dilate, erode, close, then image colour inversion and finally an 'opening' step to close the small 'blobs'. 
 <img src="./assets/demo-lynton3.png">
 
 **Result: KPI4KYJ**
@@ -175,6 +175,8 @@ Areas for Improvement:
 My attempts of the task involved working backwards from the desired outcome in order to meet my teammates in the middle. As I worked through the code iterations, it became more evident that image preprocessing such as making the image greyscale and toggling the threshold for exposure became necessary to isolate the plate and its characters. As my teammates worked on configurations using boundary detection and text transforms, I looked to methods from YouTube and example projects on MATLAB to identify disruptive techniques such as tracking the distribution of white in an image to get a region of interest (ROI) around the plate. Some projects I found used training data of individual car plate characters which I found interesting but excessive for this task. I found OCR best - next time I would include a confidence score so that the user of the program could quantify the model’s accuracy in reading the plate for troubleshooting and debugging purposes.
 
 ### Lynton Sutton statement of contribution
+
+The objective of my code was to develop a simple 'MVP', demostrating a successful license plate reading of a single test image. I started by researching standard practices, it became clear that multiple approaches are adopted commercially. I then decided to develop an image processing pipeline from first priciples. Starting with a test image, I noticed that the yellow license plate stood out from the colours in the rest of the image. I applied a colour filter, this worked successfully. I then tried to expand the code to work for both yellow and white number plates, however detection of white license plates proved to be significatly more challenging as the colour filter would also pull through silver body trim and reflections on paintwork. This lead me to believe additional parallel processes would likely be necessary in combination with colour filtering. I tried hough transform to detect the edges of the plate, although vertical lines were not detected, I also tried filtering the image by kmeans, this proved promising. Combining methods in a parallel image processing pipeline was the next step. Automating selection of the correct kmeans image mask was the next problem to work on. Additionally, working on an adaptive HSV colour filter would also be necessary, to ensure success on a wider range of images. 
 
 ### Oliver Dai statement of contribution
 
