@@ -11,6 +11,8 @@ Design of Visual Systems – Spring Term 2026 – Imperial College London
  - Lynton Sutton
  - India Lloyd-Evans
 
+<img src="./assets/team.jpg">
+
 ## Project Summary
 We chose the task of vehicle number plate recognition. We picked this because there was opportunity to apply our learning of multiple detection methods and colour processing. Challenges we faced in our attempts were largely to do with the different colour contrasts and angular positioning of the number plates in different test images from the dataset – isolating the number plate as a rectangular box amidst shadowing also meant crops became too tight. We employed OCR as the ‘reading’ program, which was somewhat accurate, with slight error in recognising similar characters such as ‘7’ and ‘T’, as well as ‘U’ and ‘V’, but this was not something we focused on solving. 
 
